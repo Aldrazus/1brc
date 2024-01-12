@@ -1,5 +1,7 @@
 #include <algorithm>
+#include <execution>
 #include <fstream>
+#include <future>
 #include <limits>
 #include <string>
 #include <vector>
@@ -11,6 +13,7 @@
 #include <string_view>
 #include <print>
 #include <chrono>
+#include <unordered_map>
 
 #define NOMINMAX // lol ok
 #include <Windows.h>
@@ -20,23 +23,90 @@
  *  
  *  Initial impl:                       1mm - 1.172s    |   1b - too long
  *  Memory-mapped I/O + views/ranges:   1mm - 0.841s    |   1b - 6.381s
- *  
+ *  Multithreading:                     1mm -           |   1b - 1m2.477s
+ *  Forward-only integer parsing:       1mm -           |   1b - 34.219s
  */
 
-const int_fast32_t num_lines = 1000000;
+/*  Things to try
+ *  SIMD
+ *  Large tables
+ *  Custom hash
+ */
+
+/*  Things that I tried
+ *  std::transform_reduce w/ par exec policy - reduce op needs to be commutative and associative
+ */
+
+const int_fast32_t num_lines = 1'000'000'000;
 
 // TODO: check these types
 struct Stats {
-    int_fast32_t min;
-    int_fast64_t total;
-    int_fast32_t max;
-    int_fast64_t n;
+    int_fast32_t min = std::numeric_limits<int_fast32_t>::max();
+    int_fast32_t max = std::numeric_limits<int_fast32_t>::min();
+    int_fast64_t total = 0;
+    int_fast64_t n = 0;
 };
+
+using StatsMap = std::unordered_map<std::string, Stats>;
+
+int_fast16_t ParseTemperature(std::string_view sv) {
+    int_fast16_t sign = 1;
+    if (sv[0] == '-') {
+        sv = sv.substr(1);
+        sign *= -1;
+    }
+    int_fast16_t t = 0;
+    for (char digit : sv) {
+        if (digit == '.') continue;
+        t *= 10;
+        t += digit - '0';
+    }
+    return t * sign;
+}
+
+StatsMap ProcessChunk(auto&& chunk) {
+    StatsMap stats;
+    for (std::string_view&& line : chunk) {
+        auto delim = line.find(';');
+        std::string id{line.substr(0, delim)};
+        std::string line_s{line};
+        int_fast16_t measurement = ParseTemperature(line.substr(delim + 1, std::string::npos));
+
+        Stats& s = stats[id];
+        s.max = std::max(s.max, measurement);
+        s.min = std::min(s.min, measurement);
+        s.n++;
+        s.total += measurement;
+    }
+    
+    return stats;
+}
+
+void PrintStatsMap(const StatsMap& stats_map) {
+    std::print("{{");
+    for (auto& [k, v] : stats_map) {
+        std::print("{}={:.1f}/{:.1f}/{:.1f}, ", k, v.min / 10., v.total / (v.n * 10.), v.max / 10.);
+    }
+    std::println("}}");
+}
+
+void once(const StatsMap& m) {
+    static bool done = false;
+    if (!done) {
+        done = true;
+        PrintStatsMap(m);
+    }
+}
 
 int main() {
 
+    const uint_fast32_t num_threads = std::thread::hardware_concurrency();
+    std::println("Running on {} threads", num_threads);
+
+    const auto chunk_size = num_lines / num_threads;
+
     HANDLE file = CreateFile(
-        "measurements_mm.txt",
+        "measurements.txt",
         GENERIC_READ,
         FILE_SHARE_READ,
         NULL,
@@ -71,36 +141,33 @@ int main() {
     std::string_view sv{mapped};
 
     // split da line yaya
-    auto lines = sv
+    auto chunks = sv
         | std::views::split('\n')
         | std::views::transform([](auto&& str) { return std::string_view(str); })
-        | std::views::take(num_lines - 1); // can we avoid this or make something more robust?
+        | std::views::take(num_lines - 1)
+        | std::views::chunk(chunk_size);
 
-    std::map<std::string, Stats> stats;
+    std::vector<std::future<StatsMap>> thread_results;
+    thread_results.reserve(num_threads);
+    std::ranges::for_each(chunks, [&thread_results](auto&& chunk){
+            std::future<StatsMap> f = std::async(std::launch::async, [](auto&& chunk) {
+                return ProcessChunk(chunk);
+            }, chunk);
+            thread_results.push_back(std::move(f));
+    });
 
-    for (auto [i, line]: std::views::enumerate(lines)) {
-        // processLine(line);
-        std::string line_s{line};
-        auto delim = line_s.find(';');
-        std::string id = line_s.substr(0, delim);
-        int_fast32_t measurement = std::stod(line_s.substr(delim + 1, std::string::npos)) * 10;
-        try {
-        } catch (std::exception e) {
-            std::println("wtf is this shit {}: {}", id, line_s.substr(delim + 1, std::string::npos));
+    StatsMap final_map;
+    for (auto&& result : thread_results) {
+        StatsMap stats_map = result.get();
+
+        for (auto& [id, stats] : stats_map) {
+            Stats& final_stats = final_map[id];
+            final_stats.total += stats.total;
+            final_stats.n += stats.n;
+            final_stats.min = std::min(final_stats.min, stats.min);
+            final_stats.max = std::max(final_stats.max, stats.max);
         }
-
-        if (!stats.contains(id)) {
-            stats[id] = Stats{.min=std::numeric_limits<int_fast32_t>::max(), .total=0, .max=std::numeric_limits<int_fast32_t>::min(), .n=0};
-        }
-
-        stats[id].max = std::max(stats[id].max, measurement);
-        stats[id].min = std::min(stats[id].min, measurement);
-        stats[id].n++;
     }
 
-    std::print("{{");
-    for (auto& [k, v] : stats) {
-        std::print("{}={:.1f}/{:.1f}/{:.1f}, ", k, v.min / 10., v.total / static_cast<double>(v.n), v.max / 10.);
-    }
-    std::println("}}");
+    PrintStatsMap(final_map);
 }
