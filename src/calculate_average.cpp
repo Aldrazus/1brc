@@ -25,7 +25,7 @@
  *  Memory-mapped I/O + views/ranges:   1mm - 0.841s    |   1b - 6.381s
  *  Multithreading:                     1mm -           |   1b - 1m2.477s
  *  Forward-only integer parsing:       1mm -           |   1b - 34.219s
- *  Improved integer parsing:           1mm -           |   1b - 25.151s
+ *  Improved integer parsing:           1mm -           |   1b - 23.470s
  */
 
 /*  Things to try
@@ -43,26 +43,26 @@ const int_fast32_t num_lines = 1'000'000'000;
 
 // TODO: check these types
 struct Stats {
-    int_fast8_t min = std::numeric_limits<int_fast8_t>::max();
-    int_fast8_t max = std::numeric_limits<int_fast8_t>::min();
+    int_fast16_t min = std::numeric_limits<int_fast16_t>::max();
+    int_fast16_t max = std::numeric_limits<int_fast16_t>::min();
     int_fast64_t total = 0;
     int_fast64_t n = 0;
 };
 
 using StatsMap = std::unordered_map<std::string, Stats>;
 
-int_fast8_t ParseTemperature(std::string_view sv) {
-    int_fast8_t sign = 1;
+int_fast16_t ParseTemperature(std::string_view sv) {
+    int_fast16_t sign = 1;
     if (sv[0] == '-') {
         sv = sv.substr(1);
         sign *= -1;
     }
     // 1.4 or -2.1
     if (sv[1] == '.') {
-        return sign * (10 * sv[0] + sv[2]);
+        return sign * (10 * sv[0] + sv[2] - '0' * 11);
     }
     // 27.8 or -39.2
-    return sign * (100 * sv[0] + 10 * sv[1] + sv[3]);
+    return sign * (100 * sv[0] + 10 * sv[1] + sv[3] - '0' * 111);
 }
 
 StatsMap ProcessChunk(auto&& chunk) {
@@ -71,7 +71,7 @@ StatsMap ProcessChunk(auto&& chunk) {
         auto delim = line.find(';');
         std::string id{line.substr(0, delim)};
         std::string line_s{line};
-        int_fast8_t measurement =
+        int_fast16_t measurement =
             ParseTemperature(line.substr(delim + 1, std::string::npos));
 
         Stats& s = stats[id];
