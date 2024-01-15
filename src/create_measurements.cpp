@@ -428,13 +428,15 @@ struct {
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
-        std::cerr << "Usage: create_measurements <number of records to create>\n";
+        std::cerr
+            << "Usage: create_measurements <number of records to create>\n";
     }
 
     uint64_t n = std::stol(argv[1]);
     std::random_device rd;
     std::mt19937 rng(rd());
-    std::uniform_int_distribution<uint32_t> udist(0, sizeof(data) / sizeof(data[0]) - 1);
+    std::uniform_int_distribution<uint32_t> udist(
+        0, sizeof(data) / sizeof(data[0]) - 1);
 
     std::ofstream ofs{"measurements_mm.txt"};
 
