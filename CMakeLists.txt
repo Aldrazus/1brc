@@ -6,11 +6,85 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(CMAKE_CXX_FLAGS "-Wall -Wextra")
-set(CMAKE_CXX_FLAGS_DEBUG "")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+if (MSVC)
+    add_compile_options(
+        # debug
+        "$<$<CONFIG:Debug>:/W4>"
+        "$<$<CONFIG:Debug>:/Zi>"
+
+        # rel w/ debug info (for profiling)
+        "$<$<CONFIG:RelWithDebInfo>:/Zi>"
+        "$<$<CONFIG:RelWithDebInfo>:/O2>"
+
+        # release
+        "$<$<CONFIG:Release>:/O2>"
+    )
+
+    add_link_options(
+        # debug
+        "$<$<CONFIG:Debug>:/DEBUG:FULL>"
+        "$<$<CONFIG:Debug>:/INCREMENTAL>"
+
+        # rel w/ debug info (for profiling)
+        "$<$<CONFIG:RelWithDebInfo>:/DEBUG:FULL>"
+        "$<$<CONFIG:RelWithDebInfo>:/PROFILE>"
+        # already implied
+        "$<$<CONFIG:RelWithDebInfo>:/DEBUG:FULL>"
+        "$<$<CONFIG:RelWithDebInfo>:/INCREMENTAL:NO>"
+
+        # release
+        "$<$<CONFIG:Release>:/INCREMENTAL:NO>"
+    )
+else()
+    add_compile_options(
+        # debug
+        "$<$<CONFIG:Debug>:-Wall>"
+        "$<$<CONFIG:Debug>:-Wextra>"
+        "$<$<CONFIG:Debug>:-g>"
+        "$<$<CONFIG:Debug>:-gcodeview>"
+
+        # rel w/ debug info (for profiling)
+        "$<$<CONFIG:RelWithDebInfo>:-O3>"
+        "$<$<CONFIG:RelWithDebInfo>:-g>"
+        "$<$<CONFIG:RelWithDebInfo>:-gcodeview>"
+
+        # release
+        "$<$<CONFIG:Release>:-O3>"
+    )
+
+    if (WIN32)
+        # On Windows, clang's lld-link supports the same flags as link.exe
+        add_link_options(
+            # debug
+            "$<$<CONFIG:Debug>:LINKER:/DEBUG:FULL>"
+            "$<$<CONFIG:Debug>:LINKER:/INCREMENTAL>"
+
+            # rel w/ debug info (for profiling)
+            "$<$<CONFIG:RelWithDebInfo>:LINKER:/DEBUG:FULL>"
+            "$<$<CONFIG:RelWithDebInfo>:LINKER:/PROFILE>"
+            # already implied
+            "$<$<CONFIG:RelWithDebInfo>:LINKER:/DEBUG:FULL>"
+            "$<$<CONFIG:RelWithDebInfo>:LINKER:/INCREMENTAL:NO>"
+
+            # release
+            "$<$<CONFIG:Release>:LINKER:/INCREMENTAL:NO>"
+        )
+    else()
+        add_link_options(
+            # debug
+            "$<$<CONFIG:Debug>:LINKER:--pdb=>"
+
+            # rel w/ debug info (for profiling)
+            "$<$<CONFIG:RelWithDebInfo>:LINKER:--pdb=>"
+        )
+    endif()
+endif()
 
 add_executable("calculate_average")
 add_executable("create_measurements")
+
+if (MSVC)
+    set(VS_STARTUP_PROJECT calculate_average)
+endif()
 
 add_subdirectory(src)
