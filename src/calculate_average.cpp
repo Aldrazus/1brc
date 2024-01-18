@@ -41,7 +41,6 @@
 
 const int_fast32_t num_lines = 1'000'000'000;
 
-// TODO: check these types
 struct Stats {
     int_fast16_t min = std::numeric_limits<int_fast16_t>::max();
     int_fast16_t max = std::numeric_limits<int_fast16_t>::min();
@@ -51,26 +50,41 @@ struct Stats {
 
 using StatsMap = std::unordered_map<std::string, Stats>;
 
-int_fast16_t ParseTemperature(std::string_view sv) {
+inline int_fast16_t ParseTemperature(std::string_view sv) {
     int_fast16_t sign = 1;
     if (sv[0] == '-') {
         sv = sv.substr(1);
         sign *= -1;
     }
-    // 1.4 or -2.1
+    // X.X or -X.X
     if (sv[1] == '.') {
         return sign * (10 * sv[0] + sv[2] - '0' * 11);
     }
-    // 27.8 or -39.2
+    // XX.X or -XX.X
     return sign * (100 * sv[0] + 10 * sv[1] + sv[3] - '0' * 111);
 }
 
-StatsMap ProcessChunk(auto&& chunk) {
+StatsMap ProcessChunk(std::string_view data, size_t chunk_start, size_t chunk_end) {
     StatsMap stats;
-    for (std::string_view&& line : chunk) {
+
+    // Recalculate the chunk borders
+    // Position the chunk start after the first newline within the current chunk.
+    // Position the chunk end at the first newline within the next chunk.
+    // TODO: debug cutoff at end of each chunk
+    while (data[chunk_start++] != '\n');
+    
+    chunk_end--;
+    while (chunk_end < data.size() && data[++chunk_end] != '\n');
+
+    std::string_view chunk = data.substr(chunk_start, chunk_end - chunk_start);
+
+    auto lines = chunk 
+        | std::views::split('\n')
+        | std::views::transform([](auto&& str){ return std::string_view{str}; });
+
+    for (std::string_view&& line : lines) {
         auto delim = line.find(';');
         std::string id{line.substr(0, delim)};
-        std::string line_s{line};
         int_fast16_t measurement =
             ParseTemperature(line.substr(delim + 1, std::string::npos));
 
@@ -84,6 +98,12 @@ StatsMap ProcessChunk(auto&& chunk) {
     return stats;
 }
 
+uint_fast32_t PcgHash(uint_fast32_t input) {
+    uint_fast32_t state = input * 747796405u + 2891336453u;
+    uint_fast32_t word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
 void PrintStatsMap(const StatsMap& stats_map) {
     std::print("{{");
     for (auto& [k, v] : stats_map) {
@@ -93,19 +113,23 @@ void PrintStatsMap(const StatsMap& stats_map) {
     std::println("}}");
 }
 
-void once(const StatsMap& m) {
-    static bool done = false;
-    if (!done) {
-        done = true;
-        PrintStatsMap(m);
+inline std::string_view trim_end(std::string_view sv) {
+    if (sv[sv.length() - 1] == '\n') {
+        return sv.substr(0, sv.length() - 1);
     }
+    return sv;
 }
+
+struct Bounds {
+    size_t start;
+    size_t end;
+};
 
 int main() {
     const uint_fast32_t num_threads = std::thread::hardware_concurrency();
-    std::println("Running on {} threads", num_threads);
 
     const auto chunk_size = num_lines / num_threads;
+
 
     HANDLE file = CreateFile("measurements.txt", GENERIC_READ, FILE_SHARE_READ,
                              NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -121,23 +145,25 @@ int main() {
                       FILE_MAP_READ,  // TODO: experiment with large pages
                       0, 0, file_size.QuadPart));
 
-    std::string_view sv{mapped};
+    std::string_view sv = trim_end(mapped);
 
-    // split da line yaya
-    auto chunks =
-        sv | std::views::split('\n') | std::views::transform([](auto&& str) {
-            return std::string_view(str);
-        }) |
-        std::views::take(num_lines - 1) | std::views::chunk(chunk_size);
+    std::vector<Bounds> bounds;
+    bounds.reserve(num_threads);
+    for (size_t i = 0; i < num_threads - 1; i++) {
+        bounds.emplace_back(i * chunk_size, (i+1) * chunk_size);
+    }
+    bounds.emplace_back((num_threads - 1) * chunk_size, sv.size());
 
     std::vector<std::future<StatsMap>> thread_results;
     thread_results.reserve(num_threads);
-    std::ranges::for_each(chunks, [&thread_results](auto&& chunk) {
+
+    for (Bounds b : bounds) {
         std::future<StatsMap> f = std::async(
-            std::launch::async,
-            [](auto&& chunk) { return ProcessChunk(chunk); }, chunk);
+                std::launch::async,
+                // std::launch::deferred,
+                [](std::string_view data, Bounds&& bounds) { return ProcessChunk(data, bounds.start, bounds.end); }, sv, b);
         thread_results.push_back(std::move(f));
-    });
+    }
 
     StatsMap final_map;
     // TODO: sort
