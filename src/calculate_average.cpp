@@ -13,6 +13,7 @@
 #include <string_view>
 #include <print>
 #include <unordered_map>
+#include <numeric>
 
 #define NOMINMAX  // lol ok
 #include <Windows.h>
@@ -26,6 +27,8 @@
  *  Forward-only integer parsing:       1b - 34.219s
  *  Improved integer parsing:           1b - 23.470s
  *  Chunk by bytes instead of lines:    1b - 13.249s
+ *  std::transform_reduce (par)         1b - 14.986s
+ *  std::transform_reduce (par_unseq)   1b - 15.465s
  */
 
 /*  Things to try
@@ -35,8 +38,7 @@
  */
 
 /*  Things that I tried
- *  std::transform_reduce w/ par exec policy - reduce op needs to be commutative
- * and associative
+ *  std::transform_reduce w/ par exec policy - slower than std::async, less CPU utilization (only 6 cores, not all 12)
  */
 
 struct Stats {
@@ -155,32 +157,25 @@ int main() {
     }
     bounds.emplace_back((num_threads - 1) * chunk_size, sv.size());
 
-    std::vector<std::future<StatsMap>> thread_results;
-    thread_results.reserve(num_threads);
-
-    for (Bounds b : bounds) {
-        std::future<StatsMap> f = std::async(
-            std::launch::async,
-            // std::launch::deferred,
-            [](std::string_view data, Bounds&& bounds) {
-                return ProcessChunk(data, bounds.start, bounds.end);
-            },
-            sv, b);
-        thread_results.push_back(std::move(f));
-    }
-
-    StatsMap final_map;
-    for (auto&& result : thread_results) {
-        StatsMap stats_map = result.get();
-
-        for (auto& [id, stats] : stats_map) {
-            Stats& final_stats = final_map[id];
-            final_stats.total += stats.total;
-            final_stats.n += stats.n;
-            final_stats.min = std::min(final_stats.min, stats.min);
-            final_stats.max = std::max(final_stats.max, stats.max);
+    StatsMap final_map = std::transform_reduce(
+        std::execution::par_unseq,
+        bounds.begin(),
+        bounds.end(),
+        StatsMap{},
+        [](StatsMap&& a, const StatsMap&& b){
+            for (auto [id, stats] : b) {
+                auto& [min, max, total, n] = a[id];
+                min = std::min(min, stats.min);
+                max = std::max(max, stats.max);
+                total += stats.total;
+                n += stats.n;
+            }
+            return a;
+        },
+        [sv](Bounds b){
+            return ProcessChunk(sv, b.start, b.end);
         }
-    }
+    );
 
     PrintStatsMap(final_map);
 }
