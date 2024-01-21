@@ -29,6 +29,7 @@
  *  Chunk by bytes instead of lines:    1b - 13.249s
  *  std::transform_reduce (par)         1b - 14.986s
  *  std::transform_reduce (par_unseq)   1b - 15.465s
+ *  Process chunks on all 12 cores      1b - 11.993s
  */
 
 /*  Things to try
@@ -124,11 +125,6 @@ inline std::string_view trim_end(std::string_view sv) {
     return sv;
 }
 
-struct Bounds {
-    size_t start;
-    size_t end;
-};
-
 struct FileView {
     std::string_view file_view;
     uint64_t size;
@@ -160,13 +156,6 @@ int main() {
     auto [mapped_view, file_size] = MapFile("measurements.txt");
 
     const auto chunk_size = file_size / num_threads;
-
-    std::vector<Bounds> bounds;
-    bounds.reserve(num_threads);
-    for (size_t i = 0; i < num_threads - 1; i++) {
-        bounds.emplace_back(i * chunk_size, (i + 1) * chunk_size);
-    }
-    bounds.emplace_back((num_threads - 1) * chunk_size, mapped_view.size());
 
     // Transform
     std::vector<StatsMap> partial_maps;
