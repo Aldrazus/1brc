@@ -129,10 +129,13 @@ struct Bounds {
     size_t end;
 };
 
-int main() {
-    const uint_fast32_t num_threads = std::thread::hardware_concurrency();
+struct FileView {
+    std::string_view file_view;
+    uint64_t size;
+};
 
-    HANDLE file = CreateFile("measurements.txt", GENERIC_READ, FILE_SHARE_READ,
+FileView MapFile(const char* filename) {
+    HANDLE file = CreateFile(filename, GENERIC_READ, FILE_SHARE_READ,
                              NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
     HANDLE mapping =
@@ -141,8 +144,6 @@ int main() {
     LARGE_INTEGER file_size;
     GetFileSizeEx(file, &file_size);
 
-    const auto chunk_size = file_size.QuadPart / num_threads;
-
     const char* mapped = reinterpret_cast<const char*>(
         MapViewOfFile(mapping,
                       FILE_MAP_READ,  // TODO: experiment with large pages
@@ -150,19 +151,51 @@ int main() {
 
     std::string_view sv = trim_end(mapped);
 
+    return {sv, static_cast<uint64_t>(file_size.QuadPart)};
+}
+
+int main() {
+    const uint_fast32_t num_threads = std::thread::hardware_concurrency();
+
+    auto [mapped_view, file_size] = MapFile("measurements.txt");
+
+    const auto chunk_size = file_size / num_threads;
+
     std::vector<Bounds> bounds;
     bounds.reserve(num_threads);
     for (size_t i = 0; i < num_threads - 1; i++) {
         bounds.emplace_back(i * chunk_size, (i + 1) * chunk_size);
     }
-    bounds.emplace_back((num_threads - 1) * chunk_size, sv.size());
+    bounds.emplace_back((num_threads - 1) * chunk_size, mapped_view.size());
 
-    StatsMap final_map = std::transform_reduce(
-        std::execution::par_unseq,
-        bounds.begin(),
-        bounds.end(),
+    // Transform
+    std::vector<StatsMap> partial_maps;
+    partial_maps.reserve(num_threads);
+    {
+        std::vector<std::future<StatsMap>> transform_futures;
+        transform_futures.reserve(num_threads);
+        for (uint32_t i = 0; i < num_threads - 1; i++) {
+            uint64_t start = i * chunk_size;
+            uint64_t end = std::min((i + 1) * chunk_size, file_size);
+            transform_futures.push_back(std::async(
+                std::launch::async,
+                ProcessChunk,
+                mapped_view, start, end
+            ));
+        }
+        for (auto&& f : transform_futures) {
+            partial_maps.push_back(f.get());
+        }
+    }
+
+    // Reduce
+    // Done over 6 threads
+    StatsMap final_map = std::reduce(
+        std::execution::par,
+        partial_maps.begin(),
+        partial_maps.end(),
         StatsMap{},
-        [](StatsMap&& a, const StatsMap&& b){
+        [](auto&& a, auto&& b){
             for (auto [id, stats] : b) {
                 auto& [min, max, total, n] = a[id];
                 min = std::min(min, stats.min);
@@ -171,9 +204,6 @@ int main() {
                 n += stats.n;
             }
             return a;
-        },
-        [sv](Bounds b){
-            return ProcessChunk(sv, b.start, b.end);
         }
     );
 
