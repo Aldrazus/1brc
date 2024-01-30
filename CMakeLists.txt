@@ -88,7 +88,7 @@ if (MSVC)
     # Set 'calculate_average' as the startup project in VS
     set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT "calculate_average")
     
-    set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:$<PROJECT_NAME>>")
+    set_property(TARGET "calculate_average" PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:$<PROJECT_NAME>>")
 endif()
 
 add_subdirectory(src)
