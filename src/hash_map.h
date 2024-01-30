@@ -1,8 +1,10 @@
 #pragma once
 
+#include <emmintrin.h>
 #include <cstdint>
 #include <string_view>
 #include <unordered_map>
+#include <array>
 
 struct Stats {
     std::string_view id;
@@ -41,3 +43,62 @@ class HashMap {
         static const uint64_t size_;
         Stats* buckets_;
 };
+
+// crc32 sucks, high collisions
+// Simple multiply-shift hash function.
+// Avoids modular arithmetic on a hash table
+// with a size that's a power of two
+// h_z(x) = (x * z) / 2^(w-d)
+// where x is a w-bit integer, z is an odd w-bit integer,
+// the hash table is of size 2^d, and floor division is performed.
+// Thanks to integer overflow, x * z will always be in range [0, 2^w)
+// Also, floor division by a power of 2 is the same as shifting left
+// https://en.wikipedia.org/wiki/Universal_hashing
+inline uint64_t HashMap::Hash(std::string_view key) {
+    /*
+    const __m128i* data = reinterpret_cast<const __m128i*>(key.data());
+    __m128i chars = _mm_loadu_si128(data);
+    __m128i mask = _mm_setr_epi64((__m64)(first_word_mask_[key.length()]), (__m64)(second_word_mask_[key.length()]));
+    __m128i masked = _mm_and_si128(chars, mask);
+    __m128i sumchars = _mm_add_epi8(masked, _mm_unpackhi_epi64(masked, masked));
+
+    uint64_t x = _mm_cvtsi128_si64(sumchars);
+    */
+
+    uint64_t x = *reinterpret_cast<const uint64_t*>(key.data()) & first_word_mask_[key.length()];
+
+    // Random odd 64-bit unsigned int
+    static const uint64_t z = 957877;
+
+    // Take top d bytes of the product to use as the hash
+    static const uint32_t w_minus_d = 64 - 14;
+
+    return (x * z) >> w_minus_d;
+}
+
+inline StatsMap HashMap::ToStatsMap() const {
+    StatsMap m;
+    for (uint64_t i = 0; i < size_; i++) {
+        Stats& bucket = buckets_[i];
+        if (bucket.n == 0) [[unlikely]] {
+            continue;
+        }
+        m[bucket.id] = bucket;
+    }
+    return m;
+}
+
+// Performs linear probing to handle collisions
+inline Stats& HashMap::operator[](std::string_view key) {
+    auto index = Hash(key);
+    Stats& entry = buckets_[index];
+    if (entry.n == 0) [[unlikely]] {
+        return entry;
+    }
+
+    while (entry.n != 0 && entry.id != key) {
+        entry = buckets_[++index];
+    }
+
+    return entry;
+}

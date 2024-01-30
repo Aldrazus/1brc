@@ -30,42 +30,6 @@ HashMap& HashMap::operator=(HashMap other) noexcept {
     return *this;
 }
 
-Stats& HashMap::operator[](std::string_view key) {
-    auto index = Hash(key) % size_;
-    Stats& entry = buckets_[index];
-    if (entry.n == 0) [[unlikely]] {
-        return entry;
-    }
-
-    while (buckets_[index].n != 0 && buckets_[index].id != key) {
-        index = (index + 1) % size_;
-    }
-
-    return buckets_[index];
-}
-
-StatsMap HashMap::ToStatsMap() const {
-    StatsMap m;
-    for (uint64_t i = 0; i < size_; i++) {
-        Stats& bucket = buckets_[i];
-        if (bucket.n == 0) [[unlikely]] {
-            continue;
-        }
-        m[bucket.id] = bucket;
-    }
-    return m;
-}
-
-// crc32 sucks, high collisions
-uint64_t HashMap::Hash(std::string_view key) {
-    uint32_t sum = 0;
-    for (char c : key) {
-        sum += c;
-    }
-
-    return (sum * 749449) >> 18;
-}
-
 void HashMap::InitMasks() {
     first_word_mask_.fill(~0x0ull);
     second_word_mask_.fill(~0x0ull);
@@ -85,4 +49,4 @@ void HashMap::InitMasks() {
 bool HashMap::initialized_masks_ = false;
 std::array<uint64_t, 101> HashMap::first_word_mask_;
 std::array<uint64_t, 101> HashMap::second_word_mask_;
-const uint64_t HashMap::size_ = 16384 * 8;
+const uint64_t HashMap::size_ = 16384;

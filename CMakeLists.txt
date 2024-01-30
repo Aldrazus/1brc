@@ -37,6 +37,7 @@ if (MSVC)
     )
 else()
     add_compile_options(
+        "-msse4.2"
         # debug
         "$<$<CONFIG:Debug>:-Wall>"
         "$<$<CONFIG:Debug>:-Wextra>"
