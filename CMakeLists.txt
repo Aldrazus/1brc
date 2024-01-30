@@ -81,10 +81,14 @@ else()
 endif()
 
 add_executable("calculate_average")
-add_executable("create_measurements")
 
 if (MSVC)
-    set(VS_STARTUP_PROJECT calculate_average)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+    # Set 'calculate_average' as the startup project in VS
+    set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT "calculate_average")
+    
+    set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:$<PROJECT_NAME>>")
 endif()
 
 add_subdirectory(src)

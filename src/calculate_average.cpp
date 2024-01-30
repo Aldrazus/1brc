@@ -5,7 +5,6 @@
 #include <limits>
 #include <string>
 #include <vector>
-#include <map>
 #include <iostream>
 #include <cstdint>
 #include <cstdio>
@@ -125,35 +124,52 @@ inline std::string_view trim_end(std::string_view sv) {
     return sv;
 }
 
-struct FileView {
-    std::string_view file_view;
-    uint64_t size;
+class FileView {
+    public:
+        FileView(const char* filename) {
+            file_ = CreateFile(filename, GENERIC_READ, FILE_SHARE_READ,
+                    NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+            mapping_ =
+                CreateFileMapping(file_, NULL, PAGE_READONLY, 0, 0, "mapped file");
+
+            LARGE_INTEGER file_size;
+            GetFileSizeEx(file_, &file_size);
+
+            const char* mapping = reinterpret_cast<const char*>(
+                    MapViewOfFile(mapping_,
+                        FILE_MAP_READ,  // TODO: experiment with large pages
+                        0, 0, file_size.QuadPart));
+            
+            file_view = std::string_view{mapping, static_cast<uint64_t>(file_size.QuadPart)};
+
+            if (file_view[file_view.length() - 1] == '\n') {
+                file_view = file_view.substr(0, file_view.length() - 1);
+            }
+        }
+
+        ~FileView() {
+            UnmapViewOfFile(map_view_);
+            CloseHandle(mapping_);
+            CloseHandle(file_);
+        }
+
+        std::string_view file_view;
+        uint64_t size;
+
+    private:
+        HANDLE file_;
+        HANDLE mapping_;
+        LPVOID map_view_;
+
 };
-
-FileView MapFile(const char* filename) {
-    HANDLE file = CreateFile(filename, GENERIC_READ, FILE_SHARE_READ,
-                             NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-
-    HANDLE mapping =
-        CreateFileMapping(file, NULL, PAGE_READONLY, 0, 0, "measurements");
-
-    LARGE_INTEGER file_size;
-    GetFileSizeEx(file, &file_size);
-
-    const char* mapped = reinterpret_cast<const char*>(
-        MapViewOfFile(mapping,
-                      FILE_MAP_READ,  // TODO: experiment with large pages
-                      0, 0, file_size.QuadPart));
-
-    std::string_view sv = trim_end(mapped);
-
-    return {sv, static_cast<uint64_t>(file_size.QuadPart)};
-}
 
 int main() {
     const uint_fast32_t num_threads = std::thread::hardware_concurrency();
 
-    auto [mapped_view, file_size] = MapFile("measurements.txt");
+    FileView fv{"measurements.txt"};
+    auto mapped_view = fv.file_view;
+    auto file_size = mapped_view.length();
 
     const auto chunk_size = file_size / num_threads;
 
@@ -163,7 +179,7 @@ int main() {
     {
         std::vector<std::future<StatsMap>> transform_futures;
         transform_futures.reserve(num_threads);
-        for (uint32_t i = 0; i < num_threads - 1; i++) {
+        for (uint32_t i = 0; i < num_threads; i++) {
             uint64_t start = i * chunk_size;
             uint64_t end = std::min((i + 1) * chunk_size, file_size);
             transform_futures.push_back(std::async(
