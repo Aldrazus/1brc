@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <string_view>
 #include <unordered_map>
-#include <array>
 
 struct Stats {
     std::string_view id;
@@ -34,12 +33,7 @@ class HashMap {
         StatsMap ToStatsMap() const;
 
         static uint64_t Hash(std::string_view key);
-
-        static void InitMasks();
     private:
-        static bool initialized_masks_;
-        static std::array<uint64_t, 101> first_word_mask_;
-        static std::array<uint64_t, 101> second_word_mask_;
         static const uint64_t size_;
         Stats* buckets_;
 };
@@ -55,17 +49,17 @@ class HashMap {
 // Also, floor division by a power of 2 is the same as shifting left
 // https://en.wikipedia.org/wiki/Universal_hashing
 inline uint64_t HashMap::Hash(std::string_view key) {
-    /*
     const __m128i* data = reinterpret_cast<const __m128i*>(key.data());
     __m128i chars = _mm_loadu_si128(data);
-    __m128i mask = _mm_setr_epi64((__m64)(first_word_mask_[key.length()]), (__m64)(second_word_mask_[key.length()]));
+
+    __m128i indices =
+        _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+    __m128i mask = _mm_cmplt_epi8(indices, _mm_set1_epi8(std::min(key.length(), 16ull)));
+
     __m128i masked = _mm_and_si128(chars, mask);
     __m128i sumchars = _mm_add_epi8(masked, _mm_unpackhi_epi64(masked, masked));
 
     uint64_t x = _mm_cvtsi128_si64(sumchars);
-    */
-
-    uint64_t x = *reinterpret_cast<const uint64_t*>(key.data()) & first_word_mask_[key.length()];
 
     // Random odd 64-bit unsigned int
     static const uint64_t z = 957877;
