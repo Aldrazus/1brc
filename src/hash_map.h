@@ -50,16 +50,15 @@ class HashMap {
 // https://en.wikipedia.org/wiki/Universal_hashing
 inline uint64_t HashMap::Hash(std::string_view key) {
     const __m128i* data = reinterpret_cast<const __m128i*>(key.data());
-    __m128i chars = _mm_loadu_si128(data);
 
+    __m128i chars = _mm_loadu_si64(data);
     __m128i indices =
         _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
-    __m128i mask = _mm_cmplt_epi8(indices, _mm_set1_epi8(std::min(key.length(), 16ull)));
+    __m128i mask = _mm_cmplt_epi8(indices, _mm_set1_epi8(std::min(key.length(), 8ull)));
+    __m128i masked_key = _mm_and_si128(chars, mask);
 
-    __m128i masked = _mm_and_si128(chars, mask);
-    __m128i sumchars = _mm_add_epi8(masked, _mm_unpackhi_epi64(masked, masked));
-
-    uint64_t x = _mm_cvtsi128_si64(sumchars);
+    // x is at most the first 8 chars of the key
+    uint64_t x = _mm_cvtsi128_si64(masked_key);
 
     // Random odd 64-bit unsigned int
     static const uint64_t z = 957877;
