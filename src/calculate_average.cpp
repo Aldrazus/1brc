@@ -17,6 +17,12 @@
 #include "file_view.h"
 #include "hash_map.h"
 
+/*
+ *  CPU: Intel Core i7-10750H 2.6 GHz
+ *  RAM: 32 GB DDR4
+ *  
+ */
+
 /*  Changelist
  *
  *  Initial impl:                       1b - too long
@@ -28,6 +34,7 @@
  *  std::transform_reduce (par)         1b - 14.986s
  *  std::transform_reduce (par_unseq)   1b - 15.465s
  *  Process chunks on all 12 cores      1b - 11.993s
+ *  Custom MultLP hash map              1b - 7.019s
  */
 
 /*  Things to try
@@ -100,10 +107,15 @@ void PrintStatsMap(const StatsMap& stats_map) {
 
     std::sort(std::execution::par, keys.begin(), keys.end());
     std::print("{{");
+    size_t i = 0;
     for (auto& k : keys) {
         auto& v = stats_map.at(k);
-        std::print("{}={:.1f}/{:.1f}/{:.1f}, ", k, v.min / 10.,
+        std::print("{}={:.1f}/{:.1f}/{:.1f}", k, v.min / 10.,
                    v.total / (v.n * 10.), v.max / 10.);
+        if (i != keys.size() - 1) [[likely]] {
+            std::print(", ");
+        };
+        i++;
     }
     std::println("}}");
 }
