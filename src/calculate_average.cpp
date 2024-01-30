@@ -14,9 +14,8 @@
 #include <unordered_map>
 #include <numeric>
 
-#define NOMINMAX  // lol ok
-#include <Windows.h>
-#include <memoryapi.h>
+#include "file_view.h"
+#include "hash_map.h"
 
 /*  Changelist
  *
@@ -41,15 +40,6 @@
  *  std::transform_reduce w/ par exec policy - slower than std::async, less CPU utilization (only 6 cores, not all 12)
  */
 
-struct Stats {
-    int_fast16_t min = std::numeric_limits<int_fast16_t>::max();
-    int_fast16_t max = std::numeric_limits<int_fast16_t>::min();
-    int_fast64_t total = 0;
-    int_fast64_t n = 0;
-};
-
-using StatsMap = std::unordered_map<std::string, Stats>;
-
 inline int_fast16_t ParseTemperature(std::string_view sv) {
     int_fast16_t sign = 1;
     if (sv[0] == '-') {
@@ -66,7 +56,7 @@ inline int_fast16_t ParseTemperature(std::string_view sv) {
 
 StatsMap ProcessChunk(std::string_view data, size_t chunk_start,
                       size_t chunk_end) {
-    StatsMap stats;
+    HashMap stats;
 
     // Recalculate the chunk borders
     // Position the chunk start after the first newline within the current
@@ -86,22 +76,23 @@ StatsMap ProcessChunk(std::string_view data, size_t chunk_start,
 
     for (std::string_view&& line : lines) {
         auto delim = line.find(';');
-        std::string id{line.substr(0, delim)};
+        std::string_view id = line.substr(0, delim);
         int_fast16_t measurement =
             ParseTemperature(line.substr(delim + 1, std::string::npos));
 
         Stats& s = stats[id];
+        s.id = id;
         s.max = std::max(s.max, measurement);
         s.min = std::min(s.min, measurement);
         s.n++;
         s.total += measurement;
     }
 
-    return stats;
+    return stats.ToStatsMap();
 }
 
 void PrintStatsMap(const StatsMap& stats_map) {
-    std::vector<std::string> keys;
+    std::vector<std::string_view> keys;
     keys.reserve(stats_map.size());
     for (auto& [k, _] : stats_map) {
         keys.push_back(k);
@@ -117,55 +108,9 @@ void PrintStatsMap(const StatsMap& stats_map) {
     std::println("}}");
 }
 
-inline std::string_view trim_end(std::string_view sv) {
-    if (sv[sv.length() - 1] == '\n') {
-        return sv.substr(0, sv.length() - 1);
-    }
-    return sv;
-}
-
-class FileView {
-    public:
-        FileView(const char* filename) {
-            file_ = CreateFile(filename, GENERIC_READ, FILE_SHARE_READ,
-                    NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-
-            mapping_ =
-                CreateFileMapping(file_, NULL, PAGE_READONLY, 0, 0, "mapped file");
-
-            LARGE_INTEGER file_size;
-            GetFileSizeEx(file_, &file_size);
-
-            const char* mapping = reinterpret_cast<const char*>(
-                    MapViewOfFile(mapping_,
-                        FILE_MAP_READ,  // TODO: experiment with large pages
-                        0, 0, file_size.QuadPart));
-            
-            file_view = std::string_view{mapping, static_cast<uint64_t>(file_size.QuadPart)};
-
-            if (file_view[file_view.length() - 1] == '\n') {
-                file_view = file_view.substr(0, file_view.length() - 1);
-            }
-        }
-
-        ~FileView() {
-            UnmapViewOfFile(map_view_);
-            CloseHandle(mapping_);
-            CloseHandle(file_);
-        }
-
-        std::string_view file_view;
-        uint64_t size;
-
-    private:
-        HANDLE file_;
-        HANDLE mapping_;
-        LPVOID map_view_;
-
-};
-
 int main() {
     const uint_fast32_t num_threads = std::thread::hardware_concurrency();
+    // const uint_fast32_t num_threads = 1;
 
     FileView fv{"measurements.txt"};
     auto mapped_view = fv.file_view;
@@ -201,8 +146,9 @@ int main() {
         partial_maps.end(),
         StatsMap{},
         [](auto&& a, auto&& b){
-            for (auto [id, stats] : b) {
-                auto& [min, max, total, n] = a[id];
+            for (auto [key, stats] : b) {
+                auto& [id, min, max, total, n] = a[key];
+                id = key;
                 min = std::min(min, stats.min);
                 max = std::max(max, stats.max);
                 total += stats.total;
