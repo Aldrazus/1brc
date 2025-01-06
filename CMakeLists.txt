@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.26)
 project("1brc")
 
 set(CMAKE_CXX_STANDARD 23)
@@ -8,6 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if (MSVC)
     add_compile_options(
+        "/arch:SSE2"
         # debug
         "$<$<CONFIG:Debug>:/W4>"
         "$<$<CONFIG:Debug>:/Zi>"
@@ -81,15 +82,17 @@ else()
     endif()
 endif()
 
-add_executable("calculate_average")
+add_executable(${PROJECT_NAME})
 
 if (MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
     # Set 'calculate_average' as the startup project in VS
-    set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT "calculate_average")
-    
-    set_property(TARGET "calculate_average" PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
+
+        message(CMAKE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+
+    set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 endif()
 
 add_subdirectory(src)

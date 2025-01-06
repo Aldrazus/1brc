@@ -1,0 +1,79 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 26
+  },
+  "configurePresets": [
+    {
+      "name": "common",
+      "hidden": true,
+      "displayName": "Ninja Multi-Config",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build",
+      "vendor": {
+        "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
+          "enableMicrosoftCodeAnalysis": true,
+          "enableClangTidyCodeAnalysis": true
+        }
+      }
+    },
+    {
+      "name": "debugNinja",
+      "displayName": "Debug (Ninja)",
+      "inherits": "common",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "relDebNinja",
+      "displayName": "Release Debug (Ninja)",
+      "inherits": "common",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "releaseNinja",
+      "displayName": "Release (Ninja)",
+      "inherits": "common",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "vs",
+      "inherits": "common",
+      "displayName": "Visual Studio",
+      "description": "Default build using Visual Studio",
+      "generator": "Visual Studio 17 2022",
+      "vendor": {
+        "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
+          "enableMicrosoftCodeAnalysis": true,
+          "enableClangTidyCodeAnalysis": true
+        }
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "configurePreset": "debugNinja",
+      "configuration": "Debug"
+    },
+    {
+      "name": "relDeb",
+      "displayName": "Release Debug",
+      "configurePreset": "relDebNinja",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "configurePreset": "releaseNinja",
+      "configuration": "Release"
+    }
+  ]
+}

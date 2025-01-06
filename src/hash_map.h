@@ -51,7 +51,7 @@ class HashMap {
 inline uint64_t HashMap::Hash(std::string_view key) {
     const __m128i* data = reinterpret_cast<const __m128i*>(key.data());
 
-    __m128i chars = _mm_loadu_si64(data);
+    __m128i chars = _mm_loadl_epi64(data);
     __m128i indices =
         _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
     __m128i mask = _mm_cmplt_epi8(indices, _mm_set1_epi8(std::min(key.length(), 8ull)));

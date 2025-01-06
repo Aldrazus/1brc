@@ -1,5 +1,5 @@
 target_sources(
-    "calculate_average"
+    ${PROJECT_NAME}
     PRIVATE
     "calculate_average.cpp"
     "file_view.cpp"
@@ -9,7 +9,7 @@ target_sources(
 )
 
 target_include_directories(
-    "calculate_average"
+    ${PROJECT_NAME}
     PRIVATE
     .
 )
