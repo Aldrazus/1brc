@@ -72,13 +72,13 @@ else()
             "$<$<CONFIG:Release>:LINKER:/INCREMENTAL:NO>"
         )
     else()
-        add_link_options(
-            # debug
-            "$<$<CONFIG:Debug>:LINKER:--pdb=>"
-
-            # rel w/ debug info (for profiling)
-            "$<$<CONFIG:RelWithDebInfo>:LINKER:--pdb=>"
-        )
+        # add_link_options(
+        #     # debug
+        #     "$<$<CONFIG:Debug>:LINKER:--pdb=>"
+        #
+        #     # rel w/ debug info (for profiling)
+        #     "$<$<CONFIG:RelWithDebInfo>:LINKER:--pdb=>"
+        # )
     endif()
 endif()
 
