@@ -84,15 +84,14 @@ endif()
 
 add_executable(${PROJECT_NAME})
 
-if (MSVC)
+add_subdirectory(src)
+
+if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-    # Set 'calculate_average' as the startup project in VS
+    # Set '1brc' as the startup project in VS
     set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
 
-        message(CMAKE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+    set_property(TARGET ${CMAKE_PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+endif ()
 
-    set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
-endif()
-
-add_subdirectory(src)

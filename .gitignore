@@ -4,5 +4,4 @@ build32/
 build64/
 buildjs/
 .vs/
-measurements.txt
-measurements_mm.txt
+data/
