@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.26)
 project("1brc")
 
 set(CMAKE_CXX_STANDARD 23)
+# TODO: remove
+set(CMAKE_CXX_COMPILER clang++-20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -39,6 +41,7 @@ if (MSVC)
 else()
     add_compile_options(
         "-msse4.2"
+        "-stdlib=libc++"
         # debug
         "$<$<CONFIG:Debug>:-Wall>"
         "$<$<CONFIG:Debug>:-Wextra>"
@@ -72,6 +75,10 @@ else()
             "$<$<CONFIG:Release>:LINKER:/INCREMENTAL:NO>"
         )
     else()
+        add_link_options(
+            "-lc++"
+            "-lc++abi"
+        )
         # add_link_options(
         #     # debug
         #     "$<$<CONFIG:Debug>:LINKER:--pdb=>"

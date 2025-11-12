@@ -34,6 +34,11 @@ class Config:
     file_path: str
     station_names_file_path: str
 
+@dataclass(frozen=True)
+class WeatherStation:
+    name: str
+    average: int
+
 def parse_args() -> Config:
     parser = ArgumentParser(description="Create measurements file to be used in 1brc.")
     parser.add_argument("-f", "--file-path", type=str, default="data/measurements.txt")
@@ -43,17 +48,18 @@ def parse_args() -> Config:
     args = parser.parse_args()
     return Config(num_rows=args.num_rows, file_path=args.file_path, station_names_file_path=args.station_names)
 
-def build_weather_station_name_list(file_path: str):
+def build_weather_station_list(file_path: str):
     """
-    Grabs the weather station names from example data provided in repo and dedups
+    Grabs the weather station names and averages from example data provided in repo and dedups
     """
-    station_names = []
+    stations = []
     with open(file_path, 'r', encoding='utf-8') as file:
         file_contents = file.read()
     for station in file_contents.splitlines():
         if "#" not in station:
-            station_names.append(station.split(';')[0])
-    return list(set(station_names))
+            name, _, average = station.partition(';')
+            stations.append(WeatherStation(name=name, average=average))
+    return list(set(stations))
 
 
 def convert_bytes(num):
@@ -84,12 +90,12 @@ def format_elapsed_time(seconds):
             return f"{int(hours)} hours {int(minutes)} minutes {int(seconds)} seconds"
 
 
-def estimate_file_size(weather_station_names, num_rows_to_create):
+def estimate_file_size(weather_stations, num_rows_to_create):
     """
     Tries to estimate how large a file the test data will be
     """
-    total_name_bytes = sum(len(s.encode("utf-8")) for s in weather_station_names)
-    avg_name_bytes = total_name_bytes / float(len(weather_station_names))
+    total_name_bytes = sum(len(station.name.encode("utf-8")) for station in weather_stations)
+    avg_name_bytes = total_name_bytes / float(len(weather_stations))
 
     # avg_temp_bytes = sum(len(str(n / 10.0)) for n in range(-999, 1000)) / 1999
     avg_temp_bytes = 4.400200100050025
@@ -102,14 +108,14 @@ def estimate_file_size(weather_station_names, num_rows_to_create):
     return f"Estimated max file size is:  {human_file_size}."
 
 
-def build_test_data(file_path: str, weather_station_names: List[str], num_rows_to_create: int):
+def build_test_data(file_path: str, weather_stations: List[WeatherStation], num_rows_to_create: int):
     """
     Generates and writes to file the requested length of test data
     """
     start_time = time.time()
     coldest_temp = -99.9
     hottest_temp = 99.9
-    station_names_10k_max = random.choices(weather_station_names, k=10_000)
+    stations_10k_max = random.choices(weather_stations, k=10_000)
     batch_size = 10000 # instead of writing line by line to file, process a batch of stations and put it to disk
     chunks = num_rows_to_create // batch_size
     print('Building test data...')
@@ -119,8 +125,8 @@ def build_test_data(file_path: str, weather_station_names: List[str], num_rows_t
             progress = 0
             for chunk in range(chunks):
                 
-                batch = random.choices(station_names_10k_max, k=batch_size)
-                prepped_deviated_batch = '\n'.join([f"{station};{random.uniform(coldest_temp, hottest_temp):.1f}" for station in batch]) # :.1f should quicker than round on a large scale, because round utilizes mathematical operation
+                batch = random.choices(stations_10k_max, k=batch_size)
+                prepped_deviated_batch = '\n'.join([f"{station.name};{random.gauss(mu=float(station.average), sigma=7):.1f}" for station in batch]) # :.1f should quicker than round on a large scale, because round utilizes mathematical operation
                 file.write(prepped_deviated_batch + '\n')
                 
                 # Update progress bar every 1%
@@ -133,6 +139,7 @@ def build_test_data(file_path: str, weather_station_names: List[str], num_rows_t
     except Exception as e:
         print("Something went wrong. Printing error info and exiting...")
         print(e)
+        raise e
         exit()
     
     end_time = time.time()
@@ -147,9 +154,9 @@ def build_test_data(file_path: str, weather_station_names: List[str], num_rows_t
 
 def main():
     config = parse_args()
-    weather_station_names = build_weather_station_name_list(config.station_names_file_path)
-    print(estimate_file_size(weather_station_names, config.num_rows))
-    build_test_data(config.file_path, weather_station_names, config.num_rows)
+    weather_stations = build_weather_station_list(config.station_names_file_path)
+    print(estimate_file_size(weather_stations, config.num_rows))
+    build_test_data(config.file_path, weather_stations, config.num_rows)
     print("Test data build complete.")
 
 

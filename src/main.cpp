@@ -5,12 +5,12 @@
 #include <string>
 #include <string_view>
 #include <algorithm>
-#include <numeric>
 #include <utility>
 #include <thread>
 #include <filesystem>
 #include <unordered_map>
 #include <ranges>
+#include <vector>
 
 struct Statistics {
     int_fast16_t min = std::numeric_limits<int_fast16_t>::max();
@@ -126,7 +126,7 @@ int main() {
             std::print(", ");
         }
         first = false;
-        std::print("{}={}/{:.1f}/{}", k, v.min, (float)v.total/v.n, v.max);
+        std::print("{}={}/{:.1f}/{}", k, (float)v.min/10.f, (float)v.total/v.n/10.f, (float)v.max/10.f);
     }
     std::println("}}");
 }
