@@ -19,6 +19,8 @@ struct Statistics {
     int_fast64_t total = 0;
 };
 
+using StatsMap = std::unordered_map<std::string, Statistics>;
+
 int_fast16_t parseTemperature(std::string_view temp) {
     int_fast16_t sign = 1;
     if (temp[0] == '-') {
@@ -58,8 +60,8 @@ std::vector<std::pair<size_t, size_t>> splitFileIntoChunks(const std::string& fi
     return chunks;
 }
 
-std::unordered_map<std::string, Statistics> processChunk(std::string_view data, size_t start, size_t end) {
-    std::unordered_map<std::string, Statistics> stats;
+StatsMap processChunk(std::string_view data, size_t start, size_t end) {
+    StatsMap stats;
 
     for (; start != 0 && data[start] != '\n'; start++) {}
 
@@ -86,6 +88,26 @@ std::unordered_map<std::string, Statistics> processChunk(std::string_view data, 
     return stats;
 }
 
+Statistics merge(const Statistics& a, const Statistics& b) {
+    return {
+        .min = std::min(a.min, b.min),
+        .max = std::max(a.max, b.max),
+        .n = a.n + b.n,
+        .total = a.total + b.total
+    };
+}
+
+StatsMap merge(const StatsMap& a, const StatsMap& b) {
+    auto rv = a;
+    
+    for (const auto& [k, v] : b) {
+        rv[k] = merge(rv[k], v);
+    }
+
+    return rv;
+}
+
+
 int main() {
     const auto chunks = splitFileIntoChunks("data/measurements.txt");
     
@@ -99,32 +121,33 @@ int main() {
         return 1;
     }
 
-    std::map<std::string, Statistics> stats;
-    
-    std::string line;
-    while (std::getline(file, line)) {
-        const char delim = ';';
-
-        const auto delimIdx = line.find(delim);
-        const auto name = line.substr(0, delimIdx);
-        const auto temp = parseTemperature(std::string_view(line).substr(delimIdx + 1));
-
-        auto& [min, max, n, total] = stats[name];
-        min = std::min(min, temp);
-        max = std::max(max, temp);
-        n++;
-        total += temp;
-    }
+    std::string fileContent( (std::istreambuf_iterator<char>(file)), (std::istreambuf_iterator<char>()));
 
     file.close();
 
+    StatsMap stats;
+
+    for (const auto& [start, end]: chunks) {
+        const auto s = processChunk(fileContent, start, end);
+        stats = merge(stats, s);
+    }
+    
     std::print("{{");
 
+    std::vector<std::string> sorted_strings;
+
+    for (const auto& [k, _] : stats) {
+        sorted_strings.push_back(k);
+    }
+
+    std::sort(sorted_strings.begin(), sorted_strings.end());
+
     bool first = true;
-    for (const auto& [k, v] : stats) {
+    for (const auto& k : sorted_strings) {
         if (!first) {
             std::print(", ");
         }
+        const auto& v = stats[k];
         first = false;
         std::print("{}={}/{:.1f}/{}", k, (float)v.min/10.f, (float)v.total/v.n/10.f, (float)v.max/10.f);
     }
