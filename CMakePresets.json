@@ -19,60 +19,42 @@
       }
     },
     {
-      "name": "debugNinja",
-      "displayName": "Debug (Ninja)",
+      "name": "gcc",
       "inherits": "common",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
-    },
-    {
-      "name": "relDebNinja",
-      "displayName": "Release Debug (Ninja)",
-      "inherits": "common",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
-      }
-    },
-    {
-      "name": "releaseNinja",
-      "displayName": "Release (Ninja)",
-      "inherits": "common",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "vs",
-      "inherits": "common",
-      "displayName": "Visual Studio",
-      "description": "Default build using Visual Studio",
-      "generator": "Visual Studio 17 2022",
-      "vendor": {
-        "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
-          "enableMicrosoftCodeAnalysis": true,
-          "enableClangTidyCodeAnalysis": true
-        }
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "debug",
-      "displayName": "Debug",
-      "configurePreset": "debugNinja",
+      "name": "common",
+      "configurePreset": "common",
+      "targets": [
+        "all"
+      ],
+      "jobs": 8
+    },
+    {
+      "name": "gcc-debug",
+      "inherits": "common",
+      "displayName": "Debug (gcc)",
+      "configurePreset": "gcc",
       "configuration": "Debug"
     },
     {
-      "name": "relDeb",
+      "name": "gcc-reldebug",
+      "inherits": "common",
       "displayName": "Release Debug",
-      "configurePreset": "relDebNinja",
+      "configurePreset": "gcc",
       "configuration": "RelWithDebInfo"
     },
     {
-      "name": "release",
+      "name": "gcc-release",
+      "inherits": "common",
       "displayName": "Release",
-      "configurePreset": "releaseNinja",
+      "configurePreset": "gcc",
       "configuration": "Release"
     }
   ]

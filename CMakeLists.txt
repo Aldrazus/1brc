@@ -2,10 +2,7 @@ cmake_minimum_required(VERSION 3.26)
 project("1brc")
 
 set(CMAKE_CXX_STANDARD 23)
-# TODO: remove
-set(CMAKE_CXX_COMPILER clang++-20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if (MSVC)
@@ -41,17 +38,14 @@ if (MSVC)
 else()
     add_compile_options(
         "-msse4.2"
-        "-stdlib=libc++"
         # debug
         "$<$<CONFIG:Debug>:-Wall>"
         "$<$<CONFIG:Debug>:-Wextra>"
         "$<$<CONFIG:Debug>:-g>"
-        "$<$<CONFIG:Debug>:-gcodeview>"
 
         # rel w/ debug info (for profiling)
         "$<$<CONFIG:RelWithDebInfo>:-O3>"
         "$<$<CONFIG:RelWithDebInfo>:-g>"
-        "$<$<CONFIG:RelWithDebInfo>:-gcodeview>"
 
         # release
         "$<$<CONFIG:Release>:-O3>"
@@ -61,10 +55,14 @@ else()
         # On Windows, clang's lld-link supports the same flags as link.exe
         add_link_options(
             # debug
+            # only supported on Windows
+            "$<$<CONFIG:Debug>:-gcodeview>"
             "$<$<CONFIG:Debug>:LINKER:/DEBUG:FULL>"
             "$<$<CONFIG:Debug>:LINKER:/INCREMENTAL>"
 
             # rel w/ debug info (for profiling)
+            # only supported on Windows
+            "$<$<CONFIG:RelWithDebInfo>:-gcodeview>"
             "$<$<CONFIG:RelWithDebInfo>:LINKER:/DEBUG:FULL>"
             "$<$<CONFIG:RelWithDebInfo>:LINKER:/PROFILE>"
             # already implied
@@ -75,10 +73,17 @@ else()
             "$<$<CONFIG:Release>:LINKER:/INCREMENTAL:NO>"
         )
     else()
-        add_link_options(
-            "-lc++"
-            "-lc++abi"
-        )
+        if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+            add_compile_options(
+                "-stdlib=libc++"
+            )
+
+            add_link_options(
+                "-lc++"
+                "-lc++abi"
+                "-fuse-ld=lld"
+            )
+        endif()
         # add_link_options(
         #     # debug
         #     "$<$<CONFIG:Debug>:LINKER:--pdb=>"
@@ -87,6 +92,7 @@ else()
         #     "$<$<CONFIG:RelWithDebInfo>:LINKER:--pdb=>"
         # )
     endif()
+
 endif()
 
 add_executable(${PROJECT_NAME})
