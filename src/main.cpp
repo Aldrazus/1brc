@@ -21,6 +21,9 @@ struct Statistics {
 
 using StatsMap = std::unordered_map<std::string, Statistics>;
 
+// Hash maps for each chunk
+std::vector<StatsMap> chunkMaps;
+
 int_fast16_t parseTemperature(std::string_view temp) {
     int_fast16_t sign = 1;
     if (temp[0] == '-') {
@@ -46,7 +49,6 @@ std::vector<std::pair<size_t, size_t>> splitFileIntoChunks(const std::string& fi
     std::vector<std::pair<size_t, size_t>> chunks;
     chunks.resize(numChunks);
 
-    std::println("filesize: {}", fileSize);
     const auto baseChunkSize = fileSize / numChunks;
     const auto remainder = fileSize % numChunks;
 
@@ -60,15 +62,17 @@ std::vector<std::pair<size_t, size_t>> splitFileIntoChunks(const std::string& fi
     return chunks;
 }
 
-StatsMap processChunk(std::string_view data, size_t start, size_t end) {
-    StatsMap stats;
+void processChunk(std::string_view data, size_t start, size_t end, size_t i) {
+    auto& stats = chunkMaps[i];
 
     for (; start != 0 && data[start] != '\n'; start++) {}
+    start++;
 
     for (end--; end < data.size() && data[end] != '\n'; end++) {}
 
     const auto chunk = data.substr(start, end - start);
 
+    // TODO: make sure lines aren't empty
     auto lines = chunk | std::views::split('\n') | std::views::transform([](auto&& str) { return std::string_view{str}; });
 
     for (auto&& line : lines) {
@@ -84,8 +88,6 @@ StatsMap processChunk(std::string_view data, size_t start, size_t end) {
         n++;
         total += temp;
     }
-
-    return stats;
 }
 
 Statistics merge(const Statistics& a, const Statistics& b) {
@@ -109,11 +111,9 @@ StatsMap merge(const StatsMap& a, const StatsMap& b) {
 
 
 int main() {
+    chunkMaps.resize(std::thread::hardware_concurrency());
+
     const auto chunks = splitFileIntoChunks("data/measurements.txt");
-    
-    for (const auto& [start, end] : chunks) {
-        std::println("{} to {}", start, end);
-    }
 
     std::ifstream file("data/measurements.txt");
     if (!file) {
@@ -127,9 +127,18 @@ int main() {
 
     StatsMap stats;
 
+    std::vector<std::thread> threads;
+
+    // TODO: fix this for loop
+    size_t i = 0;
     for (const auto& [start, end]: chunks) {
-        const auto s = processChunk(fileContent, start, end);
-        stats = merge(stats, s);
+        threads.push_back(std::thread(processChunk, fileContent, start, end, i));
+        i++;
+    }
+
+    for (size_t i = 0; i < threads.size(); i++) {
+        threads[i].join();
+        stats = merge(stats, chunkMaps[i]);
     }
     
     std::print("{{");

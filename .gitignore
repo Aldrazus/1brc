@@ -5,3 +5,5 @@ build64/
 buildjs/
 .vs/
 data/
+perf.*
+flamegraph.html
