@@ -76,6 +76,8 @@ else()
         if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
             add_compile_options(
                 "-stdlib=libc++"
+                "$<$<CONFIG:Debug>:-fno-omit-frame-pointer>"
+                "$<$<CONFIG:RelWithDebInfo>:-fno-omit-frame-pointer>"
             )
 
             add_link_options(
