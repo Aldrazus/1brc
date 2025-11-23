@@ -1,7 +1,6 @@
 #include <print>
 #include <iostream>
 #include <fstream>
-#include <map>
 #include <string>
 #include <string_view>
 #include <algorithm>
@@ -11,6 +10,7 @@
 #include <unordered_map>
 #include <ranges>
 #include <vector>
+#include "hash_map.h"
 
 struct Statistics {
     int_fast16_t min = std::numeric_limits<int_fast16_t>::max();
